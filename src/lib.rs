@@ -131,7 +131,7 @@ impl SessionStore for RedisSessionStore {
 
         let mut connection = self.connection().await?;
 
-        match session.expires_in() {
+        let () = match session.expires_in() {
             None => connection.set(id, string).await?,
 
             Some(expiry) => {
@@ -147,7 +147,7 @@ impl SessionStore for RedisSessionStore {
     async fn destroy_session(&self, session: Session) -> Result {
         let mut connection = self.connection().await?;
         let key = self.prefix_key(session.id());
-        connection.del(key).await?;
+        let () = connection.del(key).await?;
         Ok(())
     }
 
@@ -159,7 +159,7 @@ impl SessionStore for RedisSessionStore {
         } else {
             let ids = self.ids().await?;
             if !ids.is_empty() {
-                connection.del(ids).await?;
+                let () = connection.del(ids).await?;
             }
         }
         Ok(())
