@@ -26,7 +26,7 @@
 )]
 
 use async_session::{async_trait, serde_json, Result, Session, SessionStore};
-use redis::{aio::Connection, AsyncCommands, Client, IntoConnectionInfo, RedisResult};
+use redis::{aio::MultiplexedConnection, AsyncCommands, Client, IntoConnectionInfo, RedisResult};
 
 /// # RedisSessionStore
 #[derive(Clone, Debug)]
@@ -108,8 +108,8 @@ impl RedisSessionStore {
         }
     }
 
-    async fn connection(&self) -> RedisResult<Connection> {
-        self.client.get_async_std_connection().await
+    async fn connection(&self) -> RedisResult<MultiplexedConnection> {
+        self.client.get_multiplexed_async_std_connection().await
     }
 }
 
@@ -131,14 +131,10 @@ impl SessionStore for RedisSessionStore {
 
         let mut connection = self.connection().await?;
 
-        match session.expires_in() {
+        let () = match session.expires_in() {
             None => connection.set(id, string).await?,
 
-            Some(expiry) => {
-                connection
-                    .set_ex(id, string, expiry.as_secs())
-                    .await?
-            }
+            Some(expiry) => connection.set_ex(id, string, expiry.as_secs()).await?,
         };
 
         Ok(session.into_cookie_value())
@@ -146,8 +142,8 @@ impl SessionStore for RedisSessionStore {
 
     async fn destroy_session(&self, session: Session) -> Result {
         let mut connection = self.connection().await?;
-        let key = self.prefix_key(session.id().to_string());
-        connection.del(key).await?;
+        let key = self.prefix_key(session.id());
+        let () = connection.del(key).await?;
         Ok(())
     }
 
@@ -159,7 +155,7 @@ impl SessionStore for RedisSessionStore {
         } else {
             let ids = self.ids().await?;
             if !ids.is_empty() {
-                connection.del(ids).await?;
+                let () = connection.del(ids).await?;
             }
         }
         Ok(())
